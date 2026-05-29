@@ -84,7 +84,7 @@ class Series:
         )
 
     def to_json(self) -> dict:
-        # polymorphism
+        # children may be either Series or Course objects
         data = [child.to_json() for child in self.children]
 
         return {
@@ -98,7 +98,7 @@ class Row:
         self.sending = sending
 
     def __repr__(self):
-        return f'<Row>'
+        return f'<Row {self.sending} -> {self.receiving}>'
     
     def to_json(self):
         return {
