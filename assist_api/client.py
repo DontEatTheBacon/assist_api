@@ -24,8 +24,13 @@ from .objects import (
     ClauseType,
     CSSClasses,
 )
-from .exceptions import *
-
+from .exceptions import (
+    PageLoadTimeoutError,
+    ElementNotFoundError,
+    WebDriverError,
+    HtmlParseError,
+    AgreementParseError
+)
 
 def retry_call(f, *args, max_retries=2, delay=0.3, **kwargs):
     for attempt in range(max_retries + 1):
@@ -42,7 +47,6 @@ def retry_call(f, *args, max_retries=2, delay=0.3, **kwargs):
 
         except (WebDriverException, InvalidSessionIdException) as e:
             raise WebDriverError() from e
-
 
 class AssistAPI:
     def __init__(self):
@@ -113,7 +117,7 @@ class AssistAPI:
         )
         submit.click()
 
-    def get_colleges(self) -> List[str]:
+    def get_colleges_from(self) -> List[str]:
         def helper():
             self._load_colleges_from()
 
@@ -132,7 +136,7 @@ class AssistAPI:
         # wrap function to retry and throw appropriately
         return retry_call(helper)
 
-    def get_transfer_colleges(self, from_college: str) -> List[str]:
+    def get_colleges_to(self, from_college: str) -> List[str]:
         def helper(from_college: str):
             self._load_colleges_to(from_college)
 
@@ -174,29 +178,105 @@ class AssistAPI:
                 )
             )
         )
-        program_button.click()
 
+        self.driver.execute_script("arguments[0].click();", program_button)
         self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, "template")))
 
         return self.driver.page_source
 
-    def _walk(
-        self, root_element: Tag, res: List[Course | Series]
-    ) -> List[Course | Series]:
+    def _walk(self, root_element: Tag) -> List[Course | Series]:
+        res = []
+        # Process current level
         for element in root_element.find_all(recursive=False):
+            # CSS classes
             classes = element.get("class", [])
 
-            # singluar course
+            # Single course
             if CSSClasses.COURSE in classes:
                 res.append(Course.from_element(element))
-            elif CSSClasses.SERIES in classes:
-                content = element.find(class_=CSSClasses.SERIES_CONTENT)
+                continue
 
-                if content:
-                    children = self._walk(content, [])
-                    series = Series.from_element(content, children)
-                    res.append(series)
+            # Neither
+            if CSSClasses.SERIES not in classes:
+                continue
+
+            # Series
+            content = element.find(class_=CSSClasses.SERIES_CONTENT)
+            if not content:
+                continue
+
+            # Recursively check series
+            children = self._walk(content)
+            res.append(Series.from_element(content, children))
+
         return res
+
+    # get_agreement functions
+    def _parse_sending(self, sending):
+        if not sending:
+            return None
+
+        root_clause = None
+
+        if sending.find(class_=CSSClasses.OR_ROOT):
+            root_clause = ClauseType.OR
+        elif sending.find(class_=CSSClasses.AND_ROOT):
+            root_clause = ClauseType.AND
+
+        data = self._walk(sending)
+
+        # more than one course if there is clause
+        if root_clause:
+            return Series(root_clause, data)
+
+        if not data:
+            return None
+        
+        if len(data) == 1:
+            return data[0]
+        
+        return Series(ClauseType.AND, data)
+
+    def _parse_receiving(self, receiving):
+        if not receiving:
+            return None
+
+        data = self._walk(receiving)
+        if len(data) == 1:
+            return data[0]
+        else:
+            # Not articulated
+            return None
+
+    def _parse_rows(self, section):
+        rows = []
+
+        for row in section.find_all(class_=CSSClasses.ROW):
+            row_receiving = row.find(class_=CSSClasses.RECEIVING)
+            row_sending = row.find(class_=CSSClasses.SENDING)
+
+            # do the receiving side (right)
+            receiving = self._parse_receiving(row_receiving)
+            # do the sending side (left)
+            sending = self._parse_sending(row_sending)
+
+            rows.append(Row(receiving, sending))
+
+        return rows
+
+    def _parse_sections(self, group):
+        sections = []
+
+        for section in group.find_all(class_=CSSClasses.SECTION):
+            letter = section.find(class_=CSSClasses.SECTION_LETTER)
+            sections.append(
+                Section(
+                    letter.get_text().strip() if letter else None,
+                    self._parse_rows(section),
+                )
+            )
+            
+        return sections
 
     def get_agreement(
         self, from_college: str, to_college: str, program: str
@@ -210,6 +290,7 @@ class AssistAPI:
         soup = BeautifulSoup(html, "html.parser")
         requirements = []
 
+        # need to implement better error handling here, elements may be missing or be missing a class or conversion fails -> KeyError, ValueError
         try:
             groups = soup.find_all(class_=CSSClasses.GROUP)
             for group in groups:
@@ -220,60 +301,9 @@ class AssistAPI:
                     group.find(class_=CSSClasses.GROUP_HEADER).get_text().split()
                 )
 
-                sections = []
-
-                for section in group.find_all(class_=CSSClasses.SECTION):
-                    section_letter = section.find(class_=CSSClasses.SECTION_LETTER)
-                    rows = []
-
-                    for row in section.find_all(class_=CSSClasses.ROW):
-                        row_receiving = row.find(class_=CSSClasses.RECEIVING)
-                        row_sending = row.find(class_=CSSClasses.SENDING)
-
-                        receiving = None
-                        sending = None
-
-                        if row_receiving:
-                            data = self._walk(row_receiving, [])
-
-                            if len(data) == 1:
-                                receiving = data[0]
-
-                        # do first layer iteratively
-                        if row_sending:
-                            # first layer clause
-                            root_clause = None
-
-                            if row_sending.find(class_=CSSClasses.OR_ROOT):
-                                root_clause = ClauseType.OR
-                            elif row_sending.find(class_=CSSClasses.AND_ROOT):
-                                root_clause = ClauseType.AND
-
-                            # the presence of a root clause implies there is > 1 courses
-                            if root_clause:
-                                sending = Series(
-                                    root_clause, self._walk(row_sending, [])
-                                )
-
-                            # the root is either a series or singular course
-                            else:
-                                data = self._walk(row_sending, [])
-
-                                if len(data) == 1:
-                                    sending = data[0]
-                                elif len(data) > 1:
-                                    sending = Series(ClauseType.AND, data)
-
-                        rows.append(Row(receiving, sending))
-                    sections.append(
-                        Section(
-                            section_letter.get_text().strip()
-                            if section_letter
-                            else None,
-                            rows,
-                        )
-                    )
+                sections = self._parse_sections(group)
                 requirements.append(Group(group_number, group_header, sections))
+
             return Agreement(requirements)
 
         except Exception as e:

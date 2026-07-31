@@ -17,8 +17,6 @@ class PageLoadTimeoutError(AssistAPIError):
 class ParseError(AssistAPIError):
     """ """
 
-#
-
 class HtmlParseError(ParseError):
     """ """
 
