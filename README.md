@@ -41,3 +41,22 @@ agreement = api.get_agreement(comp_sci)
 
 print(agreement)
 ```
+
+## Core API
+
+```python
+AssistAPI()
+
+get_academic_years() -> list[AcademicYear]
+get_institutions() -> list[Institution]
+get_majors(
+    receiving_institution: Institution, 
+    sending_institution: Institution, 
+    academic_year: AcademicYear
+) -> list[Major]
+get_agreement(major: Major) -> Agreement
+```
+
+## License
+
+MIT License
