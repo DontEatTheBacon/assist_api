@@ -8,7 +8,7 @@ A Python wrapper for the ASSIST.org articulation API.
 pip install assist-api
 ```
 
-## Example
+## Quick Start
 
 ```python
 from assist_api import AssistAPI
@@ -16,15 +16,14 @@ from assist_api import AssistAPI
 # Create API object
 api = AssistAPI()
 
-# Sending institution
+# Get institutions
 sending_institution = api.get_institution_by_name('San Joaquin Delta College')
-# Receiving institution
 receiving_institution = api.get_institution_by_name('University of California, Santa Barbara')
 
-# Academic year of agreement
+# Select academic year
 academic_year = api.get_academic_year_by_fall_year(2025)
 
-# Select major for agreement
+# Find Computer Science major
 comp_sci = next(
     (
         major 
@@ -34,6 +33,11 @@ comp_sci = next(
     None
 )
 
-# Returns an Agreement object
-print(api.get_agreement(comp_sci))
+if comp_sci is None:
+    raise ValueError('Computer Science major not found')
+
+# Fetch agreement
+agreement = api.get_agreement(comp_sci)
+
+print(agreement)
 ```
