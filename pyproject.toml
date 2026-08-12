@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling >= 1.26", "requests >= 2.34.2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "assist-api"
+version = "0.0.3"
+authors = [
+    { name="Andrew Valentine", email="andrewjvjr@gmail.com" },
+]
+description = "api wrapper for www.assist.org"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICENSE"]
+
+[project.urls]
+Homepage = "https://github.com/DontEatTheBacon/assist_api"
+Issues = "https://github.com/DontEatTheBacon/assist_api/issues"
