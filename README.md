@@ -1,6 +1,6 @@
 # assist-api
 
-A python package that wraps assist.org's API.
+A Python wrapper for the ASSIST.org articulation API.
 
 ## Installation
 
@@ -11,15 +11,17 @@ pip install assist-api
 ## Example
 
 ```python
+from assist_api import AssistAPI
+
 # Create API object
 api = AssistAPI()
 
-# Get institution that is sending courses
+# Sending institution
 sending_institution = api.get_institution_by_name('San Joaquin Delta College')
-# Get institution that is receiving courses
+# Receiving institution
 receiving_institution = api.get_institution_by_name('University of California, Santa Barbara')
 
-# Get year of agreement
+# Academic year of agreement
 academic_year = api.get_academic_year_by_fall_year(2025)
 
 # Select major for agreement
@@ -32,5 +34,6 @@ comp_sci = next(
     None
 )
 
+# Returns an Agreement object
 print(api.get_agreement(comp_sci))
 ```
